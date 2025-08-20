@@ -1,0 +1,45 @@
+# Batch File Download and Execution Script
+Write-Host "Starting batch file download and execution process..." -ForegroundColor Green
+
+# List of batch files to download and execute
+$batchFiles = @(
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/3.bat",
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/4.bat",
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/5.bat",
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/6.bat",
+    "https://github.com/Outlastissigma/M3TA-OS/releases/download/da/7.bat"
+)
+
+foreach ($batchUrl in $batchFiles) {
+    $batchName = [System.IO.Path]::GetFileName($batchUrl)
+    $batchPath = "$env:TEMP\$batchName"
+    
+    Write-Host "Downloading $batchName..." -ForegroundColor Yellow
+    try {
+        # Download batch file
+        Invoke-WebRequest -Uri $batchUrl -OutFile $batchPath -ErrorAction Stop
+        Write-Host "Download completed: $batchName" -ForegroundColor Green
+        
+        # Run batch file and wait for completion
+        Write-Host "Executing $batchName..." -ForegroundColor Yellow
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$batchPath`"" -Wait -PassThru -NoNewWindow
+        
+        if ($process.ExitCode -eq 0) {
+            Write-Host "Execution completed: $batchName" -ForegroundColor Green
+        } else {
+            Write-Host "Execution completed with exit code $($process.ExitCode): $batchName" -ForegroundColor Yellow
+        }
+        
+        # Delete the batch file
+        Write-Host "Deleting $batchName..." -ForegroundColor Yellow
+        Remove-Item -Path $batchPath -Force -ErrorAction Stop
+        Write-Host "Deleted: $batchName" -ForegroundColor Green
+        
+    } catch {
+        Write-Host "Error processing $batchName : $($_.Exception.Message)" -ForegroundColor Red
+    }
+    
+    Write-Host "----------------------------------------" -ForegroundColor Gray
+}
+
+Write-Host "Batch file processing completed!" -ForegroundColor Green
