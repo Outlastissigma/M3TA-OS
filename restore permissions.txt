@@ -1,0 +1,139 @@
+# music_permissions_restore.ps1
+# Script to restore default permissions to the Music folder
+
+param(
+    [switch]$Silent = $false
+)
+
+# Function to display colored output
+function Write-ColorOutput {
+    param([string]$Message, [string]$Color = "White")
+    Write-Host $Message -ForegroundColor $Color
+}
+
+# Function to check if running as administrator
+function Test-Admin {
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $adminRole = [Security.Principal.WindowsBuiltInRole]::Administrator
+    return (New-Object Security.Principal.WindowsPrincipal($currentUser)).IsInRole($adminRole)
+}
+
+# Main execution
+try {
+    if (-not $Silent) {
+        Write-ColorOutput "Music Folder Permissions Restore Script" "Green"
+        Write-ColorOutput "========================================" "Green"
+    }
+    
+    # Define paths
+    $musicPath = [Environment]::GetFolderPath("MyMusic")
+    
+    if (-not $Silent) {
+        Write-ColorOutput "Target folder: $musicPath" "Yellow"
+    }
+    
+    # Check if running as administrator
+    if (-not (Test-Admin)) {
+        Write-ColorOutput "This script requires administrator privileges to continue." "Red"
+        Write-ColorOutput "Please right-click on PowerShell and select 'Run as Administrator'" "Red"
+        Write-ColorOutput "or right-click this script and select 'Run with PowerShell'." "Red"
+        if (-not $Silent) { pause }
+        exit 1
+    }
+    
+    if (-not $Silent) {
+        Write-ColorOutput "Running with administrator privileges..." "Green"
+    }
+    
+    # Step 1: Take ownership of the Music folder (if needed)
+    try {
+        if (-not $Silent) {
+            Write-ColorOutput "Step 1: Taking ownership of Music folder..." "Yellow"
+        }
+        
+        $takeOwnCommand = "takeown /f `"$musicPath`" /r /d y"
+        Invoke-Expression $takeOwnCommand | Out-Null
+        
+        if (-not $Silent) {
+            Write-ColorOutput "✓ Ownership taken successfully" "Green"
+        }
+    }
+    catch {
+        Write-ColorOutput "Warning: Could not take ownership: $($_.Exception.Message)" "Yellow"
+    }
+    
+    # Step 2: Reset permissions to default Windows inheritance
+    try {
+        if (-not $Silent) {
+            Write-ColorOutput "Step 2: Restoring default permissions..." "Yellow"
+        }
+        
+        # First remove all explicit permissions
+        icacls "$musicPath" /inheritance:r /t 2>$null | Out-Null
+        
+        # Reset inheritance (this will restore default Windows permissions)
+        icacls "$musicPath" /inheritance:e /t 2>$null | Out-Null
+        
+        if (-not $Silent) {
+            Write-ColorOutput "✓ Default permissions restored successfully" "Green"
+            Write-ColorOutput "  - Inheritance has been re-enabled" "Yellow"
+            Write-ColorOutput "  - Default Windows permissions are now active" "Yellow"
+        }
+    }
+    catch {
+        Write-ColorOutput "Warning: Could not restore permissions: $($_.Exception.Message)" "Yellow"
+        
+        # Alternative method if the first fails
+        try {
+            if (-not $Silent) {
+                Write-ColorOutput "Trying alternative restoration method..." "Yellow"
+            }
+            
+            # Grant full control to the current user and SYSTEM
+            $username = $env:USERNAME
+            icacls "$musicPath" /grant "${username}:F" /t 2>$null | Out-Null
+            icacls "$musicPath" /grant "SYSTEM:F" /t 2>$null | Out-Null
+            icacls "$musicPath" /grant "Administrators:F" /t 2>$null | Out-Null
+            
+            # Enable inheritance
+            icacls "$musicPath" /inheritance:e /t 2>$null | Out-Null
+            
+            if (-not $Silent) {
+                Write-ColorOutput "✓ Alternative restoration completed" "Green"
+            }
+        }
+        catch {
+            Write-ColorOutput "Error: Could not restore permissions with alternative method: $($_.Exception.Message)" "Red"
+        }
+    }
+    
+    # Step 3: Verify restoration
+    try {
+        if (-not $Silent) {
+            Write-ColorOutput "Step 3: Verifying permissions..." "Yellow"
+        }
+        
+        # Check if inheritance is enabled
+        $acl = Get-Acl $musicPath
+        if ($acl.AreAccessRulesProtected) {
+            Write-ColorOutput "✓ Permissions are now properly configured" "Green"
+        } else {
+            Write-ColorOutput "✓ Inheritance has been restored" "Green"
+        }
+    }
+    catch {
+        Write-ColorOutput "Warning: Could not verify permissions: $($_.Exception.Message)" "Yellow"
+    }
+    
+}
+catch {
+    Write-ColorOutput "Unexpected error: $($_.Exception.Message)" "Red"
+    if (-not $Silent) { pause }
+    exit 1
+}
+
+if (-not $Silent) {
+    Write-ColorOutput "`nRestoration completed successfully!" "Green"
+    Write-ColorOutput "The Music folder should now have its default permissions." "Yellow"
+    timeout /t 5
+}
